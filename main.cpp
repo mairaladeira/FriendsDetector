@@ -49,14 +49,20 @@ void detectAndDisplay( Mat frame )
     equalizeHist( frame_gray, frame_gray );
 
     //-- Detect faces
-    face_cascade.detectMultiScale( frame_gray, faces, 1.1, 2, 0|CASCADE_SCALE_IMAGE, Size(30, 30) );
+    face_cascade.detectMultiScale( frame_gray, faces, 1.1, 6, 0|CASCADE_SCALE_IMAGE, Size(30, 30) );
 
     for ( size_t i = 0; i < faces.size(); i++ )
     {
+        Mat faceImg = frame(faces[i]);
+
+        imshow( "Detected face gray"+i, faceImg );
+
         Point center( faces[i].x + faces[i].width/2, faces[i].y + faces[i].height/2 );
         ellipse( frame, center, Size( faces[i].width/2, faces[i].height/2 ), 0, 0, 360, Scalar( 255, 0, 255 ), 4, 8, 0 );
 
         Mat faceROI = frame_gray( faces[i] );
+
+        imshow( window_name, frame );
         std::vector<Rect> eyes;
 
         //-- In each face, detect eyes
@@ -70,5 +76,5 @@ void detectAndDisplay( Mat frame )
         }
     }
     //-- Show what you got
-    imshow( window_name, frame );
+    //imshow( window_name, frame );
 }
