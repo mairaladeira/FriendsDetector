@@ -1,22 +1,23 @@
 
-#include "opencv2/opencv.hpp"
+//#include "opencv2/opencv.hpp"
 #include <iostream>
-#include <stdio.h>
+//#include <stdio.h>
 #include "preprocess.h"
 #include "opencv2/face.hpp"
-
+#include <fstream>
+#include <sstream>
 #include "opencv2/core.hpp"
-#include "opencv2/features2d.hpp"
-#include "opencv2/xfeatures2d.hpp"
+//#include "opencv2/features2d.hpp"
+//#include "opencv2/xfeatures2d.hpp"
 #include "opencv2/highgui.hpp"
 
 using namespace std;
 using namespace cv;
-using namespace cv::xfeatures2d;
 using namespace cv::face;
 
 /** Function Headers */
-void detectAndDisplay( Mat workingImg, Mat originalImg);
+vector<Mat> detectAndDisplay( Mat workingImg, Mat originalImg);
+static void read_dataset(const string& filename, vector<Mat>& images, vector<int>& labels, char separator);
 Mat scaleImg(Mat img);
 Mat getWorkImage(Mat img);
 Mat preprocessImg(Mat faceImg, int faceId);
@@ -39,17 +40,62 @@ int main( int argc, char** argv ){
     if( !eyes_cascade2.load( eyes_cascade2_name ) ){ printf("--(!)Error loading eyes cascade\n"); return -1; };
 
     const char* imagename = argc > 1 ? argv[1] : "lena.jpg";
+    string database_file = "data/att_database_train.txt";
+    // These vectors hold the images and corresponding labels:
+    vector<Mat> images;
+    vector<int> labels;
+    read_dataset(database_file, images, labels, ';');
 
+    int im_width = images[0].cols;
+    int im_height = images[0].rows;
+    // Create a FaceRecognizer and train it on the given images:
+    Ptr<FaceRecognizer> model = createEigenFaceRecognizer();
+    model->train(images, labels);
+
+    //Mat eigenvectors = model->get<Mat>("eigenvectors");
+    //printMatInfo(eigenvectors, "eigenvectors");
+    //exit(1);
     Mat img = imread(imagename); // the newer cvLoadImage alternative, MATLAB-style function
     //img = scaleImg(img);
     Mat workImg = getWorkImage(img);
     imshow( "Original Image", workImg );
-    detectAndDisplay( workImg, img);
-    Ptr<FaceRecognizer> model = createFisherFaceRecognizer();
+    vector<Mat> detectedImgs = detectAndDisplay( workImg, img);
+    //Ptr<FaceRecognizer> model = createFisherFaceRecognizer();
 
     // wait for a key
+    for ( size_t i = 0; i < detectedImgs.size(); i++ ){
+        //ostringstream name;
+        //name << "Detected Image: " << i;
+        //imshow( name.str(), detectedImgs[i] );
+        Mat face_resized;
+        cv::resize(detectedImgs[i], face_resized, Size(im_width, im_height), 1.0, 1.0, INTER_CUBIC);
+        int prediction;
+        double confidence;
+        model->predict(face_resized, prediction, confidence);
+        cout << "predicted class: " << prediction << " with confidence: " << confidence << "\n";
+        Mat W = model->getEigenVectors();
+
+    }
     cvWaitKey(0);
     return 0;
+}
+
+static void read_dataset(const string& filename, vector<Mat>& images, vector<int>& labels, char separator) {
+    std::ifstream file(filename.c_str(), ifstream::in);
+    if (!file) {
+        string error_message = "No valid input file was given, please check the given filename.";
+        CV_Error(CV_StsBadArg, error_message);
+    }
+    string line, path, classlabel;
+    while (getline(file, line)) {
+        stringstream liness(line);
+        getline(liness, path, separator);
+        getline(liness, classlabel);
+        if(!path.empty() && !classlabel.empty()) {
+            images.push_back(imread(path, 0));
+            labels.push_back(atoi(classlabel.c_str()));
+        }
+    }
 }
 
 Mat scaleImg(Mat img) {
@@ -89,11 +135,9 @@ Mat getWorkImage(Mat img){
 
 
 /** @function detectAndDisplay */
-void detectAndDisplay( Mat workingImg, Mat originalImg ){
+vector<Mat> detectAndDisplay( Mat workingImg, Mat originalImg ){
     std::vector<Rect> faces;
-    const int DETECTION_WIDTH = 320;
-    float scale = originalImg.cols/(float) DETECTION_WIDTH;
-
+    vector<Mat> detectedFaces;
     int flags = 0|CASCADE_SCALE_IMAGE;
     Size minFeatureSize(20, 20);
     float searchScaleFactor = 1.1f;
@@ -122,10 +166,11 @@ void detectAndDisplay( Mat workingImg, Mat originalImg ){
         }
 
         Mat finalImg = preprocessImg(faceROI);
-        imshow( "Detected Features", originalImg );
-        imshow( "Processed Image"+i, finalImg );
-        images.push_back(finalImg);
+        //imshow( "Detected Features", originalImg );
+        //imshow( "Processed Image"+i, finalImg );
+        detectedFaces.push_back(finalImg);
     }
+    return detectedFaces;
     //-- Show what you got
     //imshow( window_name, originalImg );
 }
