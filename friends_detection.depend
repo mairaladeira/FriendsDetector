@@ -289,12 +289,16 @@
 	<iostream>
 	<stdio.h>
 
-1453340310 source:\\psf\home\documents\dmkm\3th_semester\idm\friendsdetector\main.cpp
+1453344064 source:\\psf\home\documents\dmkm\3th_semester\idm\friendsdetector\main.cpp
 	"opencv2/opencv.hpp"
 	<iostream>
 	<stdio.h>
 	"preprocess.h"
-	"lib/face.hpp"
+	"opencv2/face.hpp"
+	"opencv2/core.hpp"
+	"opencv2/features2d.hpp"
+	"opencv2/xfeatures2d.hpp"
+	"opencv2/highgui.hpp"
 
 1453303218 source:\\psf\home\documents\dmkm\3th_semester\idm\friendsdetector\preprocess.c
 
@@ -311,4 +315,20 @@
 	"opencv2/core.hpp"
 	<map>
 	"opencv2/face/facerec.hpp"
+
+1442854516 c:\lib\opencv\opencv_contrib-master\modules\xfeatures2d\include\opencv2\xfeatures2d.hpp
+	"opencv2/features2d.hpp"
+	"opencv2/xfeatures2d/nonfree.hpp"
+
+1442854516 c:\lib\opencv\opencv_contrib-master\modules\xfeatures2d\include\opencv2\xfeatures2d\nonfree.hpp
+	"opencv2/features2d.hpp"
+
+1442854516 c:\lib\opencv\opencv_contrib-master\modules\face\include\opencv2\face.hpp
+	"opencv2/core.hpp"
+	<map>
+	"opencv2/face/facerec.hpp"
+
+1442854516 c:\lib\opencv\opencv_contrib-master\modules\face\include\opencv2\face\facerec.hpp
+	"opencv2/face.hpp"
+	"opencv2/core.hpp"
 

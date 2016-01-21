@@ -3,9 +3,16 @@
 #include <iostream>
 #include <stdio.h>
 #include "preprocess.h"
-#include "lib/face.hpp"
+#include "opencv2/face.hpp"
+
+#include "opencv2/core.hpp"
+#include "opencv2/features2d.hpp"
+#include "opencv2/xfeatures2d.hpp"
+#include "opencv2/highgui.hpp"
+
 using namespace std;
 using namespace cv;
+using namespace cv::xfeatures2d;
 using namespace cv::face;
 
 /** Function Headers */
@@ -22,6 +29,7 @@ CascadeClassifier face_cascade;
 CascadeClassifier eyes_cascade;
 CascadeClassifier eyes_cascade2;
 String window_name = "Face detection";
+vector<Mat> images;
 
 /** @function main */
 int main( int argc, char** argv ){
@@ -37,6 +45,7 @@ int main( int argc, char** argv ){
     Mat workImg = getWorkImage(img);
     imshow( "Original Image", workImg );
     detectAndDisplay( workImg, img);
+    Ptr<FaceRecognizer> model = createFisherFaceRecognizer();
 
     // wait for a key
     cvWaitKey(0);
@@ -115,11 +124,7 @@ void detectAndDisplay( Mat workingImg, Mat originalImg ){
         Mat finalImg = preprocessImg(faceROI);
         imshow( "Detected Features", originalImg );
         imshow( "Processed Image"+i, finalImg );
-
-        string facerecAlgorithm = "FaceRecognizer.Fisherfaces";
-        Ptr<FaceRecognizer> model;
-        // Use OpenCV's new FaceRecognizer in the "contrib" module:
-        model = Algorithm::create<FaceRecognizer>(facerecAlgorithm);
+        images.push_back(finalImg);
     }
     //-- Show what you got
     //imshow( window_name, originalImg );
