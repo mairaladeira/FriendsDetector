@@ -17,7 +17,7 @@ It is based on OpenCv revison 4873]]>
 				<Option object_output="obj/Debug/" />
 				<Option type="1" />
 				<Option compiler="gcc" />
-				<Option parameters="lena.jpg" />
+				<Option parameters="test.jpg" />
 				<Option projectLinkerOptionsRelation="1" />
 				<Compiler>
 					<Add option="-g" />
@@ -33,6 +33,7 @@ It is based on OpenCv revison 4873]]>
 					<Add library="C:\lib\opencv\build\mingw$(#winversion)\bin\libopencv_video$(#cvversion).dll" />
 					<Add library="C:\lib\opencv\build\mingw$(#winversion)\bin\libopencv_videoio$(#cvversion).dll" />
 					<Add library="C:\lib\opencv\build\mingw$(#winversion)\bin\libopencv_objdetect$(#cvversion).dll" />
+					<Add directory="C:/lib/opencv/build/x64/vc12/lib" />
 				</Linker>
 			</Target>
 			<Target title="Release">
@@ -52,9 +53,16 @@ It is based on OpenCv revison 4873]]>
 			<Add option="-Wall" />
 			<Add option="-fexceptions" />
 		</Compiler>
+		<Unit filename="lib/face.hpp" />
+		<Unit filename="lib/facerec.hpp" />
+		<Unit filename="lib/predict_collector.hpp" />
 		<Unit filename="main.cpp" />
+		<Unit filename="preprocess.cpp" />
+		<Unit filename="preprocess.h" />
 		<Extensions>
-			<code_completion />
+			<code_completion>
+				<search_path add="C:\lib\opencv\build\x64\vc12\lib" />
+			</code_completion>
 			<envvars />
 			<debugger />
 			<lib_finder disable_auto="1" />
