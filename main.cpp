@@ -16,7 +16,7 @@ using namespace cv;
 using namespace cv::face;
 
 /** Function Headers */
-vector<Mat> detectAndDisplay( Mat workingImg, Mat originalImg);
+vector<Mat> detectAndDisplay( Mat workingImg, Mat originalImg, Ptr<FaceRecognizer> model);
 static void read_dataset(const string& filename, vector<Mat>& images, vector<int>& labels, char separator);
 Mat scaleImg(Mat img);
 Mat getWorkImage(Mat img);
@@ -39,8 +39,8 @@ int main( int argc, char** argv ){
     if( !eyes_cascade.load( eyes_cascade_name ) ){ printf("--(!)Error loading eyes cascade\n"); return -1; };
     if( !eyes_cascade2.load( eyes_cascade2_name ) ){ printf("--(!)Error loading eyes cascade\n"); return -1; };
 
-    const char* imagename = argc > 1 ? argv[1] : "lena.jpg";
-    string database_file = "data/att_database_train.txt";
+    const char* imagename = argc > 1 ? argv[1] : "data/friends_data/aleksandra/1.jpg";
+    string database_file = "data/friends_db.txt";
     // These vectors hold the images and corresponding labels:
     vector<Mat> images;
     vector<int> labels;
@@ -49,33 +49,45 @@ int main( int argc, char** argv ){
     int im_width = images[0].cols;
     int im_height = images[0].rows;
     // Create a FaceRecognizer and train it on the given images:
-    Ptr<FaceRecognizer> model = createEigenFaceRecognizer();
+    Ptr<FaceRecognizer> model = createFisherFaceRecognizer();
     model->train(images, labels);
 
     //Mat eigenvectors = model->get<Mat>("eigenvectors");
     //printMatInfo(eigenvectors, "eigenvectors");
     //exit(1);
     Mat img = imread(imagename); // the newer cvLoadImage alternative, MATLAB-style function
+    //cv::resize(img, img, Size(320, 320), 1.0, 1.0, INTER_CUBIC);
+
     //img = scaleImg(img);
     Mat workImg = getWorkImage(img);
-    imshow( "Original Image", workImg );
-    vector<Mat> detectedImgs = detectAndDisplay( workImg, img);
+    //imshow( "Original Image", workImg );
+    vector<Mat> detectedImgs = detectAndDisplay( workImg, img, model);
     //Ptr<FaceRecognizer> model = createFisherFaceRecognizer();
 
     // wait for a key
-    for ( size_t i = 0; i < detectedImgs.size(); i++ ){
-        //ostringstream name;
-        //name << "Detected Image: " << i;
-        //imshow( name.str(), detectedImgs[i] );
+    /*for ( size_t i = 0; i < detectedImgs.size(); i++ ){
+        ostringstream name;
+        name << "Detected Image: " << i;
         Mat face_resized;
-        cv::resize(detectedImgs[i], face_resized, Size(im_width, im_height), 1.0, 1.0, INTER_CUBIC);
+        cv::resize(detectedImgs[i], face_resized, Size(320, 320), 1.0, 1.0, INTER_CUBIC);
+        imshow( name.str(), face_resized );
         int prediction;
         double confidence;
         model->predict(face_resized, prediction, confidence);
-        cout << "predicted class: " << prediction << " with confidence: " << confidence << "\n";
-        Mat W = model->getEigenVectors();
+        cout << "Image: " << i << " predicted as class: " << prediction << " with confidence: " << confidence << "\n";
+        //Mat eigenvalues = model->getEigenValues();
 
-    }
+        //Mat W = model->getEigenValues();
+        string box_text = format("Prediction = %d", prediction);
+        // Calculate the position for annotated text (make sure we don't
+        // put illegal values in there):
+        int pos_x = std::max(img.tl().x - 10, 0);
+        int pos_y = std::max(img.tl().y - 10, 0);
+        // And now put it into the image:
+        putText(img, box_text, Point(pos_x, pos_y), FONT_HERSHEY_PLAIN, 1.0, CV_RGB(0,255,0), 2.0);
+        cv::resize(img, img, Size(500, 500), 1.0, 1.0, INTER_CUBIC);
+        imshow( "Detected Features", img );
+    }*/
     cvWaitKey(0);
     return 0;
 }
@@ -92,7 +104,11 @@ static void read_dataset(const string& filename, vector<Mat>& images, vector<int
         getline(liness, path, separator);
         getline(liness, classlabel);
         if(!path.empty() && !classlabel.empty()) {
-            images.push_back(imread(path, 0));
+            Mat img = imread(path, 0);
+            int im_width = 320;
+            int im_height = 320;
+            cv::resize(img, img, Size(im_width, im_height), 1.0, 1.0, INTER_CUBIC);
+            images.push_back(img);
             labels.push_back(atoi(classlabel.c_str()));
         }
     }
@@ -135,7 +151,7 @@ Mat getWorkImage(Mat img){
 
 
 /** @function detectAndDisplay */
-vector<Mat> detectAndDisplay( Mat workingImg, Mat originalImg ){
+vector<Mat> detectAndDisplay( Mat workingImg, Mat originalImg, Ptr<FaceRecognizer> model ){
     std::vector<Rect> faces;
     vector<Mat> detectedFaces;
     int flags = 0|CASCADE_SCALE_IMAGE;
@@ -157,19 +173,38 @@ vector<Mat> detectAndDisplay( Mat workingImg, Mat originalImg ){
         Mat processedFace = preprocessFace(faceROI, eyes_cascade, eyes_cascade2, true, &leftEye, &rightEye);*/
         std::vector<Rect> eyes;
         //-- In each face, detect eyes
-        eyes_cascade.detectMultiScale( faceROI, eyes, searchScaleFactor, 2, flags, Size(1,1) );
+        eyes_cascade.detectMultiScale( faceROI, eyes, searchScaleFactor, 4, flags, Size(1,1) );
 
-        for ( size_t j = 0; j < eyes.size(); j++ ){
+        for ( size_t j = 0; j < 2; j++ ){
             Point2f eye_center( faces[i].x + eyes[j].x + eyes[j].width/2, faces[i].y + eyes[j].y + eyes[j].height/2 );
             int radius = cvRound( (eyes[j].width + eyes[j].height)*0.25 );
-            circle( originalImg, eye_center, radius, Scalar( 255, 0, 0 ), 4, 8, 0 );
+            //circle( originalImg, eye_center, radius, Scalar( 255, 0, 0 ), 4, 8, 0 );
         }
 
         Mat finalImg = preprocessImg(faceROI);
-        //imshow( "Detected Features", originalImg );
+        //cv::resize(finalImg, finalImg, Size(320, 320), 1.0, 1.0, INTER_CUBIC);
         //imshow( "Processed Image"+i, finalImg );
+        ostringstream name;
+        name << "Detected Image: " << i;
+        Mat face_resized;
+        cv::resize(faceROI, face_resized, Size(320, 320), 1.0, 1.0, INTER_CUBIC);
+        imshow( name.str(), face_resized );
+        int prediction;
+        double confidence;
+        model->predict(face_resized, prediction, confidence);
+        cout << "Image testing if it changes: " << i << " predicted as class: " << prediction << " with confidence: " << confidence << "\n";
+        string box_text = format("Prediction = %d", prediction);
+        // Calculate the position for annotated text (make sure we don't
+        // put illegal values in there):
+        int pos_x = std::max(faces[i].tl().x - 10, 0);
+        int pos_y = std::max(faces[i].tl().y - 10, 0);
+        // And now put it into the image:
+        putText(originalImg, box_text, Point(pos_x, pos_y), FONT_HERSHEY_PLAIN, 1.0, CV_RGB(0,255,0), 2.0);
+        cv::resize(originalImg, originalImg, Size(500, 500), 1.0, 1.0, INTER_CUBIC);
+        imshow( "Detected Features", originalImg );
         detectedFaces.push_back(finalImg);
     }
+
     return detectedFaces;
     //-- Show what you got
     //imshow( window_name, originalImg );
