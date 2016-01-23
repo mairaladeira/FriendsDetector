@@ -37,7 +37,7 @@ if __name__ == "__main__":
         for subdirname in dirnames:
             subject_path = os.path.join(dirname, subdirname)
             for filename in os.listdir(subject_path):
-                if ".pgm" in filename or ".bmp" in filename:
+                if ".DS_Store" not in filename:
                     print filename
                     abs_path = "%s/%s" % (subject_path, filename)
                     file_text += "%s%s%d" % (abs_path, SEPARATOR, label)

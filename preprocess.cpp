@@ -7,8 +7,6 @@ const double FACE_ELLIPSE_H = 0.90;         // Controls how tall the face mask i
 
 #include "preprocess.h"     // Easily preprocess face images, for face recognition.
 
-
-
 // Search for both eyes within the given face image. Returns the eye centers in 'leftEye' and 'rightEye',
 // or sets them to (-1,-1) if each eye was not found. Note that you can pass a 2nd eyeCascade if you
 // want to search eyes using 2 different cascades. For example, you could use a regular eye detector
@@ -44,7 +42,6 @@ void detectBothEyes(const Mat &face, CascadeClassifier &eyeCascade1, CascadeClas
     std::vector<Rect> eyes;
     eyeCascade1.detectMultiScale( face, eyes, 1.1f, 4, flags, Size(5,5) );
     if (eyes.size() == 2) {
-        cout << "worked here" ;
         *searchedLeftEye = eyes[0];
         *searchedRightEye = eyes[1];
         leftEye->x = eyes[0].x;
@@ -223,4 +220,38 @@ Mat preprocessFace(Mat &face, CascadeClassifier &eyeCascade1, CascadeClassifier 
         return dstImg;
     }
     return Mat();
+}
+
+Mat scaleImg(Mat img) {
+    const int DETECTION_WIDTH = 320;
+    Mat smallImg;
+    float scale = img.cols/(float) DETECTION_WIDTH;
+    if(img.cols > DETECTION_WIDTH) {
+        //Shrink the image while keeping the same aspect ratio.
+        int scaledHeight = cvRound(img.rows/scale);
+        resize(img, smallImg, Size(DETECTION_WIDTH, scaledHeight));
+    } else {
+        //if image is already small enough
+        smallImg = img;
+    }
+    return smallImg;
+}
+
+
+Mat getWorkImage(Mat img){
+    //Transform image to gray scale
+    Mat gray;
+    if(img.channels() == 3) {
+        cvtColor(img, gray, CV_BGR2GRAY);
+    } else if(img.channels() == 4) {
+        cvtColor(img, gray, CV_BGRA2GRAY);
+    } else {
+        //if it is already in gray scale
+        gray = img;
+    }
+    //Scale down the image size to avoid big inputs
+
+    Mat equalizedImg;
+    equalizeHist(gray, equalizedImg);
+    return equalizedImg;
 }
