@@ -7,7 +7,7 @@
 #include <iostream>
 #include <fstream>
 #include <sstream>
-
+#define PI 3.14159265
 using namespace cv;
 using namespace cv::face;
 using namespace std;
@@ -18,22 +18,28 @@ Mat scaleImg(Mat img);
 Mat getWorkImage(Mat img);
 Mat preprocessImg(Mat faceImg, int faceId);
 string getName(int prediction);
-string predictFace(Mat face, Ptr<BasicFaceRecognizer> model, int index);
-void getFirstFisherFaces(Mat W, Mat eigenvalues);
-double getReconstructedFaceDissimilarity(Mat W, Mat mean, Mat img, int i);
-double getDissimilarity(const Mat A, const Mat B);
+int predictFace(Mat face, Ptr<BasicFaceRecognizer> model, int index);
+Mat cropFace(Mat srcImg, int eyeLeftX, int eyeLeftY, int eyeRightX, int eyeRightY, int width, int height, int faceX, int faceY, int faceWidth, int faceHeight);
+
+
 
 /** Global variables */
+//bool rotation_def(true);
 String face_cascade_name = "haarcascade_frontalface_alt.xml";
 String eyes_cascade_name = "haarcascade_eye.xml";
 String eyes_cascade2_name = "haarcascade_eye_tree_eyeglasses.xml";
+//String eyes_right_2splits_name = "haarcascade_righteye_2splits.xml";
+//String eyes_left_2splits_name = "haarcascade_lefteye_2splits.xml";
 CascadeClassifier face_cascade;
 CascadeClassifier eyes_cascade;
 CascadeClassifier eyes_cascade2;
+//CascadeClassifier eyes_right_2splits;
+//CascadeClassifier eyes_left_2splits;
 String window_name = "Face detection";
 vector<Mat> images;
 int im_width;
 int im_height;
+bool rotation_def(true);
 
 static Mat norm_0_255(InputArray _src) {
     Mat src = _src.getMat();
@@ -96,39 +102,126 @@ string getName(int prediction) {
 /** @function detectAndDisplay */
 void detectAndDisplay( Mat workingImg, Mat originalImg, Ptr<BasicFaceRecognizer> model){
     std::vector<Rect> faces;
+    Mat croppedImage;
     int flags = 0|CASCADE_SCALE_IMAGE;
     Size minFeatureSize(20, 20);
     float searchScaleFactor = 1.1f;
     int minNeighbors = 6;
-    face_cascade.detectMultiScale( workingImg, faces, searchScaleFactor, minNeighbors, flags, minFeatureSize );
+    face_cascade.detectMultiScale(workingImg, faces, searchScaleFactor, 3, CV_HAAR_DO_CANNY_PRUNING, Size(originalImg.size().width*0.2, originalImg.size().height*0.2));
+    //face_cascade.detectMultiScale( workingImg, faces, searchScaleFactor, minNeighbors, flags, minFeatureSize );
     for ( size_t i = 0; i < faces.size(); i++ )
     {
         Mat faceROI = workingImg(faces[i]);
         Point center( faces[i].x + faces[i].width/2, faces[i].y + faces[i].height/2 );
         ellipse( originalImg, center, Size( faces[i].width/2, faces[i].height/2 ), 0, 0, 360, Scalar( 255, 0, 255 ), 4, 8, 0 );
-        /*std::vector<Rect> eyes;
-        //-- In each face, detect eyes
-        eyes_cascade.detectMultiScale( faceROI, eyes, searchScaleFactor, 4, flags, Size(1,1) );
 
-        for ( size_t j = 0; j < 2; j++ ){
-            Point2f eye_center( faces[i].x + eyes[j].x + eyes[j].width/2, faces[i].y + eyes[j].y + eyes[j].height/2 );
-            int radius = cvRound( (eyes[j].width + eyes[j].height)*0.25 );
-            //circle( originalImg, eye_center, radius, Scalar( 255, 0, 0 ), 4, 8, 0 );
-        }*/
+        int tlY = faces[i].y;
+        //tlY -= (faces[i].height / 3);
+        if (tlY < 0){
+            tlY = 0;
+        }
+        int drY = faces[i].y + faces[i].height;
+        //drY += +(faces[i].height / 6);
+        if (drY > originalImg.rows)
+        {
+            drY = originalImg.rows;
+        }
+        Point tl(faces[i].x, tlY);
+        Point dr(faces[i].x + faces[i].width, drY);
 
-        Mat finalImg = preprocessImg(faceROI);
-        string pred_name = predictFace(faceROI, model, i);
+        Rect newROI(tl, dr);
+        Mat croppedImage_original = originalImg(newROI);
+        Mat croppedImageGray;
+        cvtColor(croppedImage_original, croppedImageGray, CV_RGB2GRAY);
+        imshow( "testing cropped face eyes", croppedImageGray );
+
+        std::vector<Rect> eyes;
+        //std::vector<Rect> eyes2;
+        //std::vector<Rect> eyesR;
+        //std::vector<Rect> eyes2R;
+        //std::vector<Rect> eyeL;
+        //std::vector<Rect> eyes;
+
+        eyes_cascade.detectMultiScale(croppedImageGray, eyes, 1.1, 6, CV_HAAR_DO_CANNY_PRUNING, Size(croppedImageGray.size().width*0.2, croppedImageGray.size().height*0.2));
+
+        int eyeLeftX = 0;
+        int eyeLeftY = 0;
+        int eyeRightX = 0;
+        int eyeRightY = 0;
+        for (size_t j = 0; j < 2; j++){
+            int tlY2 = eyes[j].y + faces[i].y;
+            if (tlY2 < 0){
+                tlY2 = 0;
+            }
+            int drY2 = eyes[j].y + eyes[j].height + faces[i].y;
+            if (drY2>originalImg.rows)
+            {
+                drY2 = originalImg.rows;
+            }
+            Point tl2(eyes[j].x + faces[i].x, tlY2);
+            Point dr2(eyes[j].x + eyes[j].width + faces[i].x, drY2);
+
+            if (eyeLeftX == 0 && eyeLeftY == 0)
+            {
+                rectangle(originalImg, tl2, dr2, Scalar(255, 0, 0));
+                eyeLeftX = eyes[j].x;
+                eyeLeftY = eyes[j].y;
+                Rect r1(tl2, dr2);
+
+            }
+            else if (eyeRightX == 0 && eyeRightY == 0)
+            {
+                rectangle(originalImg, tl2, dr2, Scalar(255, 0, 0));
+                eyeRightX = eyes[j].x;
+                eyeRightY = eyes[j].y;
+                Rect r2(tl2, dr2);
+            }
+
+        }
+        cout << "eye left X " << eyeLeftX<< endl;
+        cout << "eye left Y " << eyeLeftY<< endl;
+        cout << "eye right X " << eyeRightX<< endl;
+        cout << "eye left Y " << eyeRightY<< endl;
+
+        if(abs(eyeRightX-eyeLeftX)>50){
+            if (!(eyeLeftX == 0 && eyeLeftY == 0)){
+                if (eyeLeftX > eyeRightX){
+                    croppedImage = cropFace(workingImg, eyeRightX, eyeRightY, eyeLeftX, eyeLeftY, 200, 200, faces[i].x, faces[i].y, faces[i].width, faces[i].height);
+                }
+                else{
+                    croppedImage = cropFace(workingImg, eyeLeftX, eyeLeftY, eyeRightX, eyeRightY, 200, 200, faces[i].x, faces[i].y, faces[i].width, faces[i].height);
+                }
+            }else{
+                croppedImage = faceROI;
+            }
+        } else{
+             croppedImage = faceROI;
+            }
+        //Mat finalImg = preprocessImg(croppedImage);
+        Mat finalImg = preprocessImg(croppedImage);
+
+
+
+        int prediction = predictFace(finalImg, model, i);
+        Mat eigenvalues = model->getEigenValues();
+        Mat eigenvectors = model -> getEigenVectors();
+        //Mat eigenvectors = model->get<Mat>("eigenvectors");
+        string pred_name = getName(prediction);
         ostringstream box_text;
         box_text << i << " Prediction = " << pred_name;
+        // Calculate the position for annotated text (make sure we don't
+        // put illegal values in there):
         int pos_x = std::max(faces[i].tl().x - 10, 0);
         int pos_y = std::max(faces[i].tl().y - 10, 0);
+        // And now put it into the image:
         putText(originalImg, box_text.str(), Point(pos_x, pos_y), FONT_HERSHEY_PLAIN, 1.0, CV_RGB(255,255,0), 2.0);
+        //detectedFaces.push_back(finalImg);
     }
     cv::resize(originalImg, originalImg, Size(600, 600), 1.0, 1.0, INTER_CUBIC);
     imshow( "Detected Features", originalImg );
 }
 
-string predictFace(Mat face, Ptr<BasicFaceRecognizer> model, int index){
+int predictFace(Mat face, Ptr<BasicFaceRecognizer> model, int index){
     ostringstream name;
     name << "Detected Image: " << index;
     Mat face_resized;
@@ -137,60 +230,63 @@ string predictFace(Mat face, Ptr<BasicFaceRecognizer> model, int index){
     int prediction = -1;
     double confidence = 0.0;
     model->predict(face_resized, prediction, confidence);
-    cout << "Image: " << index << " predicted as class: " << prediction << " with confidence: " << confidence << "\n";
-    //getFirstFisherFaces(model->getEigenVectors(), model->getEigenValues());
-    double dissimilarity = getReconstructedFaceDissimilarity(model->getEigenVectors(), model->getMean(), face_resized, index);
-    if(dissimilarity >= 0.08)
-        prediction = -1;
-    string pred_name = getName(prediction);
-    return pred_name;
+        cout << "Image: " << index << " predicted as class: " << prediction << " with confidence: " << confidence << "\n";
+    return prediction;
 }
 
-void getFirstFisherFaces(Mat W, Mat eigenvalues){
-    // Display or save the first, at most 16 Fisherfaces:
-    for (int i = 0; i < min(16, W.cols); i++) {
-        string msg = format("Eigenvalue #%d = %.5f", i, eigenvalues.at<double>(i));
-        cout << msg << endl;
-        // get eigenvector #i
-        Mat ev = W.col(i).clone();
-        // Reshape to original size & normalize to [0...255] for imshow.
-        Mat grayscale = norm_0_255(ev.reshape(1, im_height));
-        // Show the image & apply a Bone colormap for better sensing.
-        Mat cgrayscale;
-        applyColorMap(grayscale, cgrayscale, COLORMAP_BONE);
-        // Display or save:
-        imshow(format("fisherface_%d", i), cgrayscale);
+void rotate(Mat& src, double angle, Mat& dst)
+{
+    int len = max(src.cols, src.rows);
+    Point2f pt(len / 2., len / 2.);
+    Mat r = getRotationMatrix2D(pt, angle, 1.0);
 
+    warpAffine(src, dst, r, cv::Size(len, len));
+}
+
+
+Mat cropFace(Mat srcImg, int eyeLeftX, int eyeLeftY, int eyeRightX, int eyeRightY, int width, int height, int faceX, int faceY, int faceWidth, int faceHeight){
+    Mat dstImg;
+    Mat crop;
+    int eye_directionX = eyeRightX - eyeLeftX;
+    int eye_directionY = eyeRightY - eyeLeftY;
+    float rotation = atan2((float)eye_directionY, (float)eye_directionX) * 180 / PI;
+    if (rotation_def){
+    	rotate(srcImg, rotation, dstImg);
     }
+    else {
+    	dstImg = srcImg;
+    }
+  	std::vector<Rect> faces;
+	face_cascade.detectMultiScale(dstImg, faces, 1.1, 3, CV_HAAR_DO_CANNY_PRUNING, Size(dstImg.size().width*0.2, dstImg.size().height*0.2));
+
+    for (size_t i = 0; i < faces.size(); i++)
+    {
+        int tlY = faces[i].y;
+        //tlY -= (faces[i].height / 3);
+        if (tlY < 0){
+            tlY = 0;
+        }
+        int drY = faces[i].y + faces[i].height;
+        //drY += +(faces[i].height / 6);
+        if (drY > dstImg.rows)
+        {
+            drY = dstImg.rows;
+        }
+        Point tl(faces[i].x, tlY);
+        Point dr(faces[i].x + faces[i].width, drY);
+
+        Rect myROI(tl, dr);
+        Mat croppedImage_original = dstImg(myROI);
+        Mat croppedImageGray;
+        resize(croppedImage_original, crop, Size(width, height), 0, 0, INTER_CUBIC);
+        //face_cascade.detectMultiScale(dstImg, faces, 1.1, 3, CV_HAAR_DO_CANNY_PRUNING, Size(dstImg.size().width*0.2, dstImg.size().height*0.2));
+        imshow("ROTATION", crop);
+    }
+
+    return crop;
 }
 
-double getDissimilarity(const Mat A, const Mat B) {
-    //absdiff(A, B, s1);       // |I1 - I2|
-    //s1.convertTo(s1, CV_32F);  // cannot make a square on 8 bits
-    //s1 = s1.mul(s1);           // |I1 - I2|^2
 
-    //Scalar s = sum(s1);         // sum elements per channel
-
-    //double sse = s.val[0] + s.val[1] + s.val[2];
-    double errorL2 = norm(A, B, CV_L2);
-    // Scale the value since L2 is summed across all pixels.
-    double dissimilarity = errorL2 / (double)(A.rows * A.cols);
-    return dissimilarity;
-}
-
-double getReconstructedFaceDissimilarity(Mat W, Mat mean, Mat img, int i) {
-    Mat projection = LDA::subspaceProject(W, mean, img.reshape(1,1));
-    // Generate the reconstructed face back from the eigenspace.
-    Mat reconstructionRow = LDA::subspaceReconstruct(W, mean, projection);
-    Mat reconstructionMat = reconstructionRow.reshape(1, im_height);
-    // Convert the floating-point pixels to regular 8-bit uchar.
-    Mat reconstructedFace = Mat(reconstructionMat.size(), CV_8U);
-    reconstructionMat.convertTo(reconstructedFace, CV_8U, 1, 0);
-    double dissimilarity = getDissimilarity(img, reconstructedFace);
-    cout << "dissimilarity: " << dissimilarity << "\n";
-    imshow(format("reconstructed_face_%d", i), reconstructedFace);
-    return dissimilarity;
-}
 
 /** @function main */
 int main( int argc, char** argv ){
@@ -198,11 +294,12 @@ int main( int argc, char** argv ){
     if( !face_cascade.load( face_cascade_name ) ){ printf("--(!)Error loading face cascade\n"); return -1; };
     if( !eyes_cascade.load( eyes_cascade_name ) ){ printf("--(!)Error loading eyes cascade\n"); return -1; };
     if( !eyes_cascade2.load( eyes_cascade2_name ) ){ printf("--(!)Error loading eyes cascade\n"); return -1; };
-
+    //if( !eyes_right_2splits.load( eyes_right_2splits_name ) ){ printf("--(!)Error loading eyes cascade\n"); return -1; };
+    //if( !eyes_left_2splits.load( eyes_left_2splits_name ) ){ printf("--(!)Error loading eyes cascade\n"); return -1; };
     const char* imagename = argc > 1 ? argv[1] : "data/friends_data/aleksandra/1.jpg";
     string database_file = "data/friends_db.txt";
     // These vectors hold the images and corresponding labels:
-    //vector<Mat> images;
+    vector<Mat> images;
     vector<int> labels;
     read_dataset(database_file, images, labels, ';');
 
@@ -211,10 +308,10 @@ int main( int argc, char** argv ){
 
     string saveModelPath = "face-rec-model.txt";
     Ptr<BasicFaceRecognizer> model;
-    model = createEigenFaceRecognizer();
+    model = createEigenFaceRecognizer(80, 15000);
     model->train(images, labels);
-    //cout << "Saving the trained model to " << saveModelPath << endl;
-    //model->save(saveModelPath);
+    cout << "Saving the trained model to " << saveModelPath << endl;
+    model->save(saveModelPath);
     //model->load(saveModelPath);
     Mat img = imread(imagename);
     Mat workImg = getWorkImage(img);
