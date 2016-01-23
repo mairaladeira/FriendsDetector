@@ -148,9 +148,6 @@ void equalizeLeftAndRightHalves(Mat &faceImg){
 // and eye search regions into 'searchedLeftEye' & 'searchedRightEye' if given.
 Mat preprocessFace(Mat &face, CascadeClassifier &eyeCascade1, CascadeClassifier &eyeCascade2, bool doLeftAndRightSeparately, Rect *searchedLeftEye, Rect *searchedRightEye)
 {
-    // Use square faces.
-    int desiredFaceWidth = 70;
-    int desiredFaceHeight = 70;
 
     // Mark the detected face region and eye search regions as invalid, in case they aren't detected.
     if (searchedLeftEye)

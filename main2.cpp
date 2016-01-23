@@ -1,26 +1,8 @@
-
-/*
- * Copyright (c) 2011. Philipp Wagner <bytefish[at]gmx[dot]de>.
- * Released to public domain under terms of the BSD Simplified license.
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are met:
- *   * Redistributions of source code must retain the above copyright
- *     notice, this list of conditions and the following disclaimer.
- *   * Redistributions in binary form must reproduce the above copyright
- *     notice, this list of conditions and the following disclaimer in the
- *     documentation and/or other materials provided with the distribution.
- *   * Neither the name of the organization nor the names of its contributors
- *     may be used to endorse or promote products derived from this software
- *     without specific prior written permission.
- *
- *   See <http://www.opensource.org/licenses/bsd-license>
- */
-
 #include "opencv2/core.hpp"
 #include "opencv2/face.hpp"
 #include "opencv2/highgui.hpp"
 #include "opencv2/imgproc.hpp"
+#include "preprocess.h"
 
 #include <iostream>
 #include <fstream>
@@ -29,6 +11,27 @@
 using namespace cv;
 using namespace cv::face;
 using namespace std;
+
+/** Function Headers */
+Mat detectAndDisplay( Mat workingImg, Mat originalImg, Ptr<BasicFaceRecognizer> model, vector<Rect> *faces_vect);
+static void read_dataset(const string& filename, vector<Mat>& images, vector<int>& labels, char separator);
+Mat scaleImg(Mat img);
+Mat getWorkImage(Mat img);
+Mat preprocessImg(Mat faceImg, int faceId);
+string getName(int prediction);
+int predictFace(Mat face, Ptr<BasicFaceRecognizer> model, int index);
+
+/** Global variables */
+String face_cascade_name = "haarcascade_frontalface_alt.xml";
+String eyes_cascade_name = "haarcascade_eye.xml";
+String eyes_cascade2_name = "haarcascade_eye_tree_eyeglasses.xml";
+CascadeClassifier face_cascade;
+CascadeClassifier eyes_cascade;
+CascadeClassifier eyes_cascade2;
+String window_name = "Face detection";
+vector<Mat> images;
+int im_width;
+int im_height;
 
 static Mat norm_0_255(InputArray _src) {
     Mat src = _src.getMat();
@@ -48,7 +51,7 @@ static Mat norm_0_255(InputArray _src) {
     return dst;
 }
 
-static void read_csv(const string& filename, vector<Mat>& images, vector<int>& labels, char separator = ';') {
+static void read_dataset(const string& filename, vector<Mat>& images, vector<int>& labels, char separator = ';') {
     std::ifstream file(filename.c_str(), ifstream::in);
     if (!file) {
         string error_message = "No valid input file was given, please check the given filename.";
@@ -66,72 +69,119 @@ static void read_csv(const string& filename, vector<Mat>& images, vector<int>& l
     }
 }
 
+string getName(int prediction) {
+    switch(prediction) {
+        case 0:
+            return "Aleksandra";
+        case 1:
+            return "Gabriela";
+        case 2:
+            return "Julian";
+        case 3:
+            return "Kienka";
+        case 4:
+            return "Maira";
+        default:
+            return "Unknown";
+    }
+}
+
+/** @function detectAndDisplay */
+Mat detectAndDisplay( Mat workingImg, Mat originalImg, Ptr<BasicFaceRecognizer> model, vector<Rect> *faces_vect){
+    int flags = 0|CASCADE_SCALE_IMAGE;
+    Size minFeatureSize(20, 20);
+    float searchScaleFactor = 1.1f;
+    int minNeighbors = 6;
+    std::vector<Rect> faces;
+
+    face_cascade.detectMultiScale( workingImg, faces, searchScaleFactor, minNeighbors, flags, minFeatureSize );
+    *faces_vect = faces;
+    for ( size_t i = 0; i < faces.size(); i++ )
+    {
+        Mat faceROI = workingImg(faces[i]);
+        Point center( faces[i].x + faces[i].width/2, faces[i].y + faces[i].height/2 );
+        ellipse( originalImg, center, Size( faces[i].width/2, faces[i].height/2 ), 0, 0, 360, Scalar( 255, 0, 255 ), 4, 8, 0 );
+        std::vector<Rect> eyes;
+        //-- In each face, detect eyes
+        eyes_cascade.detectMultiScale( faceROI, eyes, searchScaleFactor, 4, flags, Size(1,1) );
+
+        for ( size_t j = 0; j < 2; j++ ){
+            Point2f eye_center( faces[i].x + eyes[j].x + eyes[j].width/2, faces[i].y + eyes[j].y + eyes[j].height/2 );
+            int radius = cvRound( (eyes[j].width + eyes[j].height)*0.25 );
+            //circle( originalImg, eye_center, radius, Scalar( 255, 0, 0 ), 4, 8, 0 );
+        }
+
+        Mat finalImg = preprocessImg(faceROI);
+
+        int prediction = predictFace(faceROI, model, i);
+        Mat W = model->getEigenVectors();
+        //Mat eigenvectors = model->get<Mat>("eigenvectors");
+        string pred_name = getName(prediction);
+        ostringstream box_text;
+        box_text << i << " Prediction = " << pred_name;
+        // Calculate the position for annotated text (make sure we don't
+        // put illegal values in there):
+        int pos_x = std::max(faces[i].tl().x - 10, 0);
+        int pos_y = std::max(faces[i].tl().y - 10, 0);
+        // And now put it into the image:
+        putText(originalImg, box_text.str(), Point(pos_x, pos_y), FONT_HERSHEY_PLAIN, 1.0, CV_RGB(255,255,0), 2.0);
+        //detectedFaces.push_back(finalImg);
+    }
+    cv::resize(originalImg, originalImg, Size(600, 600), 1.0, 1.0, INTER_CUBIC);
+    imshow( "Detected Features", originalImg );
+}
+
+int predictFace(Mat face, Ptr<BasicFaceRecognizer> model, int index){
+    ostringstream name;
+    name << "Detected Image: " << index;
+    Mat face_resized;
+    cv::resize(face, face_resized, Size(im_width, im_height), 1.0, 1.0, INTER_CUBIC);
+    imshow( name.str(), face_resized );
+    int prediction = -1;
+    double confidence = 0.0;
+    model->predict(face_resized, prediction, confidence);
+        cout << "Image: " << index << " predicted as class: " << prediction << " with confidence: " << confidence << "\n";
+    return prediction;
+}
+
 int main(int argc, const char *argv[]) {
-    // Check for valid command line arguments, print usage
-    // if no arguments were given.
-    if (argc < 2) {
-        cout << "usage: " << argv[0] << " <csv.ext> <output_folder> " << endl;
-        exit(1);
-    }
-    string output_folder = ".";
-    if (argc == 3) {
-        output_folder = string(argv[2]);
-    }
-    // Get the path to your CSV.
-    string fn_csv = string(argv[1]);
-    // These vectors hold the images and corresponding labels.
+    if( !face_cascade.load( face_cascade_name ) ){ printf("--(!)Error loading face cascade\n"); return -1; };
+    if( !eyes_cascade.load( eyes_cascade_name ) ){ printf("--(!)Error loading eyes cascade\n"); return -1; };
+    if( !eyes_cascade2.load( eyes_cascade2_name ) ){ printf("--(!)Error loading eyes cascade\n"); return -1; };
+    const char* imagename = argc > 1 ? argv[1] : "data/friends_data/aleksandra/1.jpg";
+    string database_file = "data/friends_db.txt";
+    // These vectors hold the images and corresponding labels:
     vector<Mat> images;
     vector<int> labels;
-    // Read in the data. This can fail if no valid
-    // input filename is given.
     try {
-        read_csv(fn_csv, images, labels);
+        read_dataset(database_file, images, labels);
     } catch (cv::Exception& e) {
-        cerr << "Error opening file \"" << fn_csv << "\". Reason: " << e.msg << endl;
+        cerr << "Error opening file \"" << database_file << "\". Reason: " << e.msg << endl;
         // nothing more we can do
         exit(1);
     }
-    // Quit if there are not enough images for this demo.
-    if(images.size() <= 1) {
-        string error_message = "This demo needs at least 2 images to work. Please add more images to your data set!";
-        CV_Error(Error::StsError, error_message);
-    }
-    // Get the height from the first image. We'll need this
-    // later in code to reshape the images to their original
-    // size:
-    int height = images[0].rows;
+
+    im_width = images[0].cols;
+    im_height = images[0].rows;
     // The following lines simply get the last images from
     // your dataset and remove it from the vector. This is
     // done, so that the training data (which we learn the
     // cv::BasicFaceRecognizer on) and the test data we test
     // the model with, do not overlap.
-    Mat testSample = images[images.size() - 1];
-    int testLabel = labels[labels.size() - 1];
-    images.pop_back();
-    labels.pop_back();
-    // The following lines create an Fisherfaces model for
-    // face recognition and train it with the images and
-    // labels read from the given CSV file.
-    // If you just want to keep 10 Fisherfaces, then call
-    // the factory method like this:
-    //
-    //      cv::createFisherFaceRecognizer(10);
-    //
-    // However it is not useful to discard Fisherfaces! Please
-    // always try to use _all_ available Fisherfaces for
-    // classification.
-    //
-    // If you want to create a FaceRecognizer with a
-    // confidence threshold (e.g. 123.0) and use _all_
-    // Fisherfaces, then call it with:
-    //
-    //      cv::createFisherFaceRecognizer(0, 123.0);
-    //
     Ptr<BasicFaceRecognizer> model = createFisherFaceRecognizer();
     model->train(images, labels);
     // The following line predicts the label of a given
     // test image:
-    int predictedLabel = model->predict(testSample);
+
+    Mat img = imread(imagename);
+    Mat workImg = getWorkImage(img);
+    std::vector<Rect> faces;
+    Mat predict_img;
+    predict_img = detectAndDisplay( workImg, img, model, &faces);
+
+    //cvWaitKey(0);
+
+    int predictedLabel = model->predict(workImg);
     //
     // To get the confidence of a prediction call the model with:
     //
@@ -139,8 +189,8 @@ int main(int argc, const char *argv[]) {
     //      double confidence = 0.0;
     //      model->predict(testSample, predictedLabel, confidence);
     //
-    string result_message = format("Predicted class = %d / Actual class = %d.", predictedLabel, testLabel);
-    cout << result_message << endl;
+    //string result_message = format("Predicted class = %d / Actual class = %d.", predictedLabel, testLabel);
+    //cout << result_message << endl;
     // Here is how to get the eigenvalues of this Eigenfaces model:
     Mat eigenvalues = model->getEigenValues();
     // And we can do the same to display the Eigenvectors (read Eigenfaces):
