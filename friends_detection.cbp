@@ -17,7 +17,7 @@ It is based on OpenCv revison 4873]]>
 				<Option object_output="obj/Debug/" />
 				<Option type="1" />
 				<Option compiler="gcc" />
-				<Option parameters="data/friends_data/gabriela/1.jpg" />
+				<Option parameters="data/friends_data/test/different_conditions/20.jpg" />
 				<Option projectLinkerOptionsRelation="1" />
 				<Compiler>
 					<Add option="-g" />
