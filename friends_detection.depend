@@ -289,7 +289,7 @@
 	<iostream>
 	<stdio.h>
 
-1453666745 source:\\psf\home\documents\dmkm\3th_semester\idm\friendsdetector\main.cpp
+1453668034 source:\\psf\home\documents\dmkm\3th_semester\idm\friendsdetector\main.cpp
 	"opencv2/core.hpp"
 	"opencv2/face.hpp"
 	"opencv2/highgui.hpp"
@@ -310,7 +310,7 @@
 	<iostream>
 	"opencv2/core.hpp"
 
-1453666692 source:\\psf\home\documents\dmkm\3th_semester\idm\friendsdetector\preprocess.cpp
+1453666943 source:\\psf\home\documents\dmkm\3th_semester\idm\friendsdetector\preprocess.cpp
 	"preprocess.h"
 
 1442854516 \\psf\home\documents\dmkm\3th_semester\idm\friendsdetector\lib\face.hpp
