@@ -145,7 +145,8 @@ void setEyeCoordinates(int *leftX, int *leftY, int *rightX, int *rightY, Rect fa
     int eyeLeftY = 0;
     int eyeRightX = 0;
     int eyeRightY = 0;
-    for (size_t j = 0; j < 2; j++){
+    int amount_eyes = eyes.size();
+    for (size_t j = 0; j < std::min(2, amount_eyes); j++){
             int tlY2 = eyes[j].y + face.y;
             if (tlY2 < 0) tlY2 = 0;
             int drY2 = eyes[j].y + eyes[j].height + face.y;

@@ -9,6 +9,8 @@
 #include "opencv2/highgui.hpp"
 #define PI 3.14159265
 
+#include <iostream>
+#include "opencv2/core.hpp"
 
 
 using namespace cv;

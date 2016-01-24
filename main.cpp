@@ -106,6 +106,7 @@ void detectAndDisplay( Mat workingImg, Mat originalImg, Ptr<BasicFaceRecognizer>
     Mat croppedImage;
     float searchScaleFactor = 1.1f;
     face_cascade.detectMultiScale(workingImg, faces, searchScaleFactor, 3, CV_HAAR_DO_CANNY_PRUNING, Size(20,20));
+
     for ( size_t i = 0; i < faces.size(); i++ ){
         Mat faceROI = workingImg(faces[i]);
         //imshow(format("Detected Face %d", i), faceROI);
@@ -117,6 +118,7 @@ void detectAndDisplay( Mat workingImg, Mat originalImg, Ptr<BasicFaceRecognizer>
         int eyeRightX = 0;
         int eyeRightY = 0;
         setEyeCoordinates(&eyeLeftX, &eyeLeftY, &eyeRightX, &eyeRightY, faces[i], originalImg, eyes_cascade);
+
         croppedImage = getCroppedImage(eyeLeftX, eyeLeftY, eyeRightX, eyeRightY, faces[i], faceROI, face_cascade);
         cv::resize(croppedImage, croppedImage, Size(320, 320), 1.0, 1.0, INTER_CUBIC);
         Mat finalImg = preprocessImg(croppedImage);
@@ -149,7 +151,7 @@ int predictFace(Mat face, Ptr<BasicFaceRecognizer> model, int index){
     Mat eigenvectors = model -> getEigenVectors();
     double sim = getReconstructedFaceDissimilarity(eigenvectors, mean, face_resized, index);
     //display_reconstructions(face_resized, eigenvectors, mean, index);
-    imshow(format("Mean: %d", index), norm_0_255(mean.reshape(1, im_width)));
+    //imshow(format("Mean: %d", index), norm_0_255(mean.reshape(1, im_width)));
     if(sim >= treshold && confidence > confidence_treshold)
         prediction = -1;
     cout << "Image: " << index << " predicted as class: " << prediction << " with confidence: " << confidence << "\n";
