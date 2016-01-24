@@ -3,76 +3,17 @@ const double DESIRED_LEFT_EYE_Y = 0.14;
 const double FACE_ELLIPSE_CY = 0.40;
 const double FACE_ELLIPSE_W = 0.50;         // Should be atleast 0.5
 const double FACE_ELLIPSE_H = 0.90;         // Controls how tall the face mask is.
-
-
+bool rotation_def(true);
 #include "preprocess.h"     // Easily preprocess face images, for face recognition.
 
-// Search for both eyes within the given face image. Returns the eye centers in 'leftEye' and 'rightEye',
-// or sets them to (-1,-1) if each eye was not found. Note that you can pass a 2nd eyeCascade if you
-// want to search eyes using 2 different cascades. For example, you could use a regular eye detector
-// as well as an eyeglasses detector, or a left eye detector as well as a right eye detector.
-// Or if you don't want a 2nd eye detection, just pass an uninitialized CascadeClassifier.
-// Can also store the searched left & right eye regions if desired.
-void detectBothEyes(const Mat &face, CascadeClassifier &eyeCascade1, CascadeClassifier &eyeCascade2, Point *leftEye, Point *rightEye, Rect *searchedLeftEye, Rect *searchedRightEye)
-{
-    // For default eye.xml or eyeglasses.xml: Finds both eyes in roughly 40% of detected faces, but does not detect closed eyes.
-    /*const float EYE_SX = 0.16f;
-    const float EYE_SY = 0.26f;
-    const float EYE_SW = 0.30f;
-    const float EYE_SH = 0.28f;
 
-    int leftX = cvRound(face.cols * EYE_SX);
-    int topY = cvRound(face.rows * EYE_SY);
-    int widthX = cvRound(face.cols * EYE_SW);
-    int heightY = cvRound(face.rows * EYE_SH);
-    int rightX = cvRound(face.cols * (1.0-EYE_SX-EYE_SW) );  // Start of right-eye corner
-
-    Mat topLeftOfFace = face(Rect(leftX, topY, widthX, heightY));
-    Mat topRightOfFace = face(Rect(rightX, topY, widthX, heightY));*/
-    Rect leftEyeRect, rightEyeRect;
-
-    /*// Return the search windows to the caller, if desired.
-    if (searchedLeftEye)
-        *searchedLeftEye = Rect(leftX, topY, widthX, heightY);
-    if (searchedRightEye)
-        *searchedRightEye = Rect(rightX, topY, widthX, heightY);*/
-
-    // Search the left region, then the right region using the 1st eye detector.
-    int flags = 0|CASCADE_SCALE_IMAGE;
-    std::vector<Rect> eyes;
-    eyeCascade1.detectMultiScale( face, eyes, 1.1f, 4, flags, Size(5,5) );
-    if (eyes.size() == 2) {
-        *searchedLeftEye = eyes[0];
-        *searchedRightEye = eyes[1];
-        leftEye->x = eyes[0].x;
-        leftEye->y = eyes[0].y;
-        rightEye->x = eyes[1].x;
-        rightEye->y = eyes[1].y;
-    }
-
-
-
-    if (eyes.size() != 2 && !eyeCascade2.empty()) {
-        eyeCascade2.detectMultiScale( face, eyes, 1.1f, 4, flags, Size(5,5) );
-        if (eyes.size() > 1) {
-            *searchedLeftEye = eyes[0];
-            *searchedRightEye = eyes[1];
-            leftEye->x = eyes[0].x;
-            leftEye->y = eyes[0].y;
-            rightEye->x = eyes[1].x;
-            rightEye->y = eyes[1].y;
-        }
-    }
-
-    if (eyes[0].width <= 0) {   // Check if the eye was detected.
-        *leftEye = Point(-1, -1);    // Return an invalid point
-    }
-
-    if (eyes[1].width <= 0) { // Check if the eye was detected.
-        *rightEye = Point(-1, -1);    // Return an invalid point
-    }
-}
-
+/** @function preprocessImg
+ * this function preprocess an image in order to obtain the appropriated images to be used in the model.
+ * It performs the following tasks:
+ * Histogram equalization of left and right side of the face
+ * Bilateral Filter
+ * Ellipse mask
+ */
 Mat preprocessImg(Mat faceImg) {
     equalizeLeftAndRightHalves(faceImg);
     Mat filtered = Mat(faceImg.size(), CV_8U);
@@ -83,17 +24,18 @@ Mat preprocessImg(Mat faceImg) {
     ellipse(mask, faceCenter, size, 0, 0, 360, Scalar(255), CV_FILLED);
     Mat dstImg = Mat(faceImg.size(), CV_8U, Scalar(128)); // Clear the output image to a default gray.
     filtered.copyTo(dstImg, mask);  // Copies non-masked pixels from filtered to dstImg.
-
     return dstImg;
 }
 
-// Histogram Equalize seperately for the left and right sides of the face.
+
+/** @function equalizeLeftAndRightHalves
+* Histogram Equalize seperately for the left and right sides of the face.
+* This function was obtained from https://github.com/MasteringOpenCV/code/tree/master/Chapter8_FaceRecognition
+*/
 void equalizeLeftAndRightHalves(Mat &faceImg){
 
     int w = faceImg.cols;
     int h = faceImg.rows;
-
-    // 1) First, equalize the whole face.
     Mat wholeFace;
     equalizeHist(faceImg, wholeFace);
 
@@ -133,92 +75,9 @@ void equalizeLeftAndRightHalves(Mat &faceImg){
     }//end y loop
 }
 
-
-// Create a grayscale face image that has a standard size and contrast & brightness.
-// "srcImg" should be a copy of the whole color camera frame, so that it can draw the eye positions onto.
-// If 'doLeftAndRightSeparately' is true, it will process left & right sides seperately,
-// so that if there is a strong light on one side but not the other, it will still look OK.
-// Performs Face Preprocessing as a combination of:
-//  - geometrical scaling, rotation and translation using Eye Detection,
-//  - smoothing away image noise using a Bilateral Filter,
-//  - standardize the brightness on both left and right sides of the face independently using separated Histogram Equalization,
-//  - removal of background and hair using an Elliptical Mask.
-// Returns either a preprocessed face square image or NULL (ie: couldn't detect the face and 2 eyes).
-// If a face is found, it can store the rect coordinates into 'storeFaceRect' and 'storeLeftEye' & 'storeRightEye' if given,
-// and eye search regions into 'searchedLeftEye' & 'searchedRightEye' if given.
-Mat preprocessFace(Mat &face, CascadeClassifier &eyeCascade1, CascadeClassifier &eyeCascade2, bool doLeftAndRightSeparately, Rect *searchedLeftEye, Rect *searchedRightEye)
-{
-
-    // Mark the detected face region and eye search regions as invalid, in case they aren't detected.
-    if (searchedLeftEye)
-        searchedLeftEye->width = -1;
-    if (searchedRightEye)
-        searchedRightEye->width = -1;
-
-    // If the input image is not grayscale, then convert the BGR or BGRA color image to grayscale.
-    Mat gray;
-    if (face.channels() == 3) {
-        cvtColor(face, gray, CV_BGR2GRAY);
-    }
-    else if (face.channels() == 4) {
-        cvtColor(face, gray, CV_BGRA2GRAY);
-    }
-    else {
-        // Access the input image directly, since it is already grayscale.
-        gray = face;
-    }
-
-    // Search for the 2 eyes at the full resolution, since eye detection needs max resolution possible!
-    Point leftEye, rightEye;
-    detectBothEyes(gray, eyeCascade1, eyeCascade2, &leftEye, &rightEye, searchedLeftEye, searchedRightEye);
-
-
-    // Check if both eyes were detected.
-    if (leftEye.x >= 0 && rightEye.x >= 0) {
-
-        Mat warped = gray;
-        if (!doLeftAndRightSeparately) {
-            // Do it on the whole face.
-            equalizeHist(warped, warped);
-        }
-        else {
-            // Do it seperately for the left and right sides of the face.
-            equalizeLeftAndRightHalves(warped);
-        }
-        //imshow("equalized", warped);
-
-        // Use the "Bilateral Filter" to reduce pixel noise by smoothing the image, but keeping the sharp edges in the face.
-        Mat filtered = Mat(warped.size(), CV_8U);
-        bilateralFilter(warped, filtered, 0, 20.0, 2.0);
-        //imshow("filtered", filtered);
-
-        // Filter out the corners of the face, since we mainly just care about the middle parts.
-        // Draw a filled ellipse in the middle of the face-sized image.
-        Mat mask = Mat(warped.size(), CV_8U, Scalar(0)); // Start with an empty mask.
-        Point faceCenter = Point( face.cols/2, cvRound(face.rows * FACE_ELLIPSE_CY) );
-        Size size = Size( cvRound(face.cols * FACE_ELLIPSE_W), cvRound(face.rows * FACE_ELLIPSE_H) );
-        ellipse(mask, faceCenter, size, 0, 0, 360, Scalar(255), CV_FILLED);
-        //imshow("mask", mask);
-
-        // Use the mask, to remove outside pixels.
-        Mat dstImg = Mat(face.size(), CV_8U, Scalar(128)); // Clear the output image to a default gray.
-        /*
-        namedWindow("filtered");
-        imshow("filtered", filtered);
-        namedWindow("dstImg");
-        imshow("dstImg", dstImg);
-        namedWindow("mask");
-        imshow("mask", mask);
-        */
-        // Apply the elliptical mask on the face.
-        filtered.copyTo(dstImg, mask);  // Copies non-masked pixels from filtered to dstImg.
-        //imshow("dstImg", dstImg);
-
-        return dstImg;
-    }
-    return Mat();
-}
-
+/** @function scaleImg
+* Scale and image to 320 width and return the scaled version
+*/
 Mat scaleImg(Mat img) {
     const int DETECTION_WIDTH = 320;
     Mat smallImg;
@@ -235,6 +94,12 @@ Mat scaleImg(Mat img) {
 }
 
 
+/** @function getWorkImage
+ * Get the appropriated image for the haar cascaded classifier.
+ * It performs the following tasks:
+ * - Conversion to gray scale
+ * - Histogram Equalization
+ */
 Mat getWorkImage(Mat img){
     //Transform image to gray scale
     Mat gray;
@@ -251,4 +116,126 @@ Mat getWorkImage(Mat img){
     Mat equalizedImg;
     equalizeHist(gray, equalizedImg);
     return equalizedImg;
+}
+
+
+/** @function setEyeCoordinates
+ * Set the Eyes coordinates using the haar cascade classifier for getting the eyes location in the image
+ */
+void setEyeCoordinates(int *leftX, int *leftY, int *rightX, int *rightY, Rect face, Mat originalImg, CascadeClassifier eyes_cascade){
+    int tlY = face.y;
+    if (tlY < 0)tlY = 0;
+
+    int drY = face.y + face.height;
+    if (drY > originalImg.rows) drY = originalImg.rows;
+
+    Point tl(face.x, tlY);
+    Point dr(face.x + face.width, drY);
+
+    Rect newROI(tl, dr);
+    Mat croppedImage_original = originalImg(newROI);
+    Mat croppedImageGray;
+    cvtColor(croppedImage_original, croppedImageGray, CV_RGB2GRAY);
+    std::vector<Rect> eyes;
+
+    eyes_cascade.detectMultiScale(croppedImageGray, eyes, 1.1, 6, CV_HAAR_DO_CANNY_PRUNING, Size(croppedImageGray.size().width*0.2, croppedImageGray.size().height*0.2));
+
+    int eyeLeftX = 0;
+    int eyeLeftY = 0;
+    int eyeRightX = 0;
+    int eyeRightY = 0;
+    for (size_t j = 0; j < 2; j++){
+            int tlY2 = eyes[j].y + face.y;
+            if (tlY2 < 0) tlY2 = 0;
+            int drY2 = eyes[j].y + eyes[j].height + face.y;
+            if (drY2>originalImg.rows) drY2 = originalImg.rows;
+            Point tl2(eyes[j].x + face.x, tlY2);
+            Point dr2(eyes[j].x + eyes[j].width + face.x, drY2);
+            if (eyeLeftX == 0 && eyeLeftY == 0){
+                rectangle(originalImg, tl2, dr2, Scalar(255, 0, 0));
+                eyeLeftX = eyes[j].x;
+                eyeLeftY = eyes[j].y;
+                Rect r1(tl2, dr2);
+            }
+            else if (eyeRightX == 0 && eyeRightY == 0){
+                rectangle(originalImg, tl2, dr2, Scalar(255, 0, 0));
+                eyeRightX = eyes[j].x;
+                eyeRightY = eyes[j].y;
+                Rect r2(tl2, dr2);
+            }
+        }
+    *leftX = eyeLeftX;
+    *leftY = eyeLeftY;
+    *rightX = eyeRightX;
+    *rightY = eyeRightY;
+}
+
+
+/** @function getCroppedImage
+* get the cropped face image using the appropriated rotation for the eyes
+*/
+Mat getCroppedImage(int eyeLeftX, int eyeLeftY, int eyeRightX, int eyeRightY, Rect face, Mat faceROI, CascadeClassifier face_cascade) {
+    Mat croppedImage;
+    if(abs(eyeRightX-eyeLeftX)>50){
+        if (!(eyeLeftX == 0 && eyeLeftY == 0)){
+            if (eyeLeftX > eyeRightX) croppedImage = cropFace(faceROI, eyeRightX, eyeRightY, eyeLeftX, eyeLeftY, 320, 320, face.x, face.y, face.width, face.height, face_cascade);
+            else croppedImage = cropFace(faceROI, eyeLeftX, eyeLeftY, eyeRightX, eyeRightY, 320, 320, face.x, face.y, face.width, face.height, face_cascade);
+        }
+        else croppedImage = faceROI;
+
+    }
+    else croppedImage = faceROI;
+    return croppedImage;
+}
+
+
+/** @function rotate
+ * rotate the face image according to an angle
+ */
+void rotate(Mat& src, double angle, Mat& dst){
+    int len = max(src.cols, src.rows);
+    Point2f pt(len / 2., len / 2.);
+    Mat r = getRotationMatrix2D(pt, angle, 1.0);
+    warpAffine(src, dst, r, cv::Size(len, len));
+}
+
+
+/** @function cropFace
+* Perform the crop task in the face
+*/
+Mat cropFace(Mat srcImg, int eyeLeftX, int eyeLeftY, int eyeRightX, int eyeRightY, int width, int height, int faceX, int faceY, int faceWidth, int faceHeight, CascadeClassifier face_cascade){
+    Mat dstImg;
+    Mat crop;
+    int eye_directionX = eyeRightX - eyeLeftX;
+    int eye_directionY = eyeRightY - eyeLeftY;
+    float rotation = atan2((float)eye_directionY, (float)eye_directionX) * 180 / PI;
+
+    if (rotation_def) rotate(srcImg, rotation, dstImg);
+    else dstImg = srcImg;
+
+  	std::vector<Rect> faces;
+	face_cascade.detectMultiScale(dstImg, faces, 1.1, 3, CV_HAAR_DO_CANNY_PRUNING, Size(dstImg.size().width*0.2, dstImg.size().height*0.2));
+
+    //FIXME: when the rotation is wrong
+    if(faces.size() == 0)  return srcImg;
+
+    for (size_t i = 0; i < faces.size(); i++){
+        int tlY = faces[i].y;
+        if (tlY < 0) tlY = 0;
+
+        int drY = faces[i].y + faces[i].height;
+        if (drY > dstImg.rows){
+            drY = dstImg.rows;
+        }
+        Point tl(faces[i].x, tlY);
+        Point dr(faces[i].x + faces[i].width, drY);
+
+        Rect myROI(tl, dr);
+        Mat croppedImage_original = dstImg(myROI);
+        Mat croppedImageGray;
+        resize(croppedImage_original, crop, Size(width, height), 0, 0, INTER_CUBIC);
+        //imshow("ROTATION", crop);
+    }
+
+    return crop;
 }
