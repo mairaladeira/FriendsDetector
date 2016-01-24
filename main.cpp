@@ -7,6 +7,8 @@
 #include <iostream>
 #include <fstream>
 #include <sstream>
+#include <sys/stat.h>
+#include <unistd.h>
 using namespace cv;
 using namespace cv::face;
 using namespace std;
@@ -37,6 +39,9 @@ const string model_name = "eigenfaces"; //set to eigenfaces or fisherfaces
 vector<Mat> images;
 int im_width;
 int im_height;
+double treshold;
+double confidence_treshold;
+void display_reconstructions(Mat img, Mat W, Mat mean, int index);
 //bool rotation_def(true);
 
 static Mat norm_0_255(InputArray _src) {
@@ -100,7 +105,7 @@ void detectAndDisplay( Mat workingImg, Mat originalImg, Ptr<BasicFaceRecognizer>
     std::vector<Rect> faces;
     Mat croppedImage;
     float searchScaleFactor = 1.1f;
-    face_cascade.detectMultiScale(workingImg, faces, searchScaleFactor, 3, CV_HAAR_DO_CANNY_PRUNING, Size(originalImg.size().width*0.2, originalImg.size().height*0.2));
+    face_cascade.detectMultiScale(workingImg, faces, searchScaleFactor, 3, CV_HAAR_DO_CANNY_PRUNING, Size(20,20));
     for ( size_t i = 0; i < faces.size(); i++ ){
         Mat faceROI = workingImg(faces[i]);
         //imshow(format("Detected Face %d", i), faceROI);
@@ -143,8 +148,9 @@ int predictFace(Mat face, Ptr<BasicFaceRecognizer> model, int index){
     Mat mean = model->getMean();
     Mat eigenvectors = model -> getEigenVectors();
     double sim = getReconstructedFaceDissimilarity(eigenvectors, mean, face_resized, index);
-    //imshow(format("Mean: %d", index), norm_0_255(mean.reshape(1, im_width)));
-    if(sim >= 0.08 && model_name == "eigenfaces")
+    //display_reconstructions(face_resized, eigenvectors, mean, index);
+    imshow(format("Mean: %d", index), norm_0_255(mean.reshape(1, im_width)));
+    if(sim >= treshold && confidence > confidence_treshold)
         prediction = -1;
     cout << "Image: " << index << " predicted as class: " << prediction << " with confidence: " << confidence << "\n";
     return prediction;
@@ -165,13 +171,26 @@ double getReconstructedFaceDissimilarity(Mat W, Mat mean, Mat img, int i) {
 }
 
 
+void display_reconstructions(Mat img, Mat W, Mat mean, int index){
+// Display or save the image reconstruction at some predefined steps:
+    for(int num_component = 0; num_component < min(16, W.cols); num_component++) {
+        // Slice the Fisherface from the model:
+        Mat ev = W.col(num_component);
+        Mat projection = LDA::subspaceProject(ev, mean, img.reshape(1,1));
+        Mat reconstruction = LDA::subspaceReconstruct(ev, mean, projection);
+        // Normalize the result:
+        reconstruction = norm_0_255(reconstruction.reshape(1, img.rows));
+        imshow(format("fisherface_reconstruction_%d%d", index, num_component), reconstruction);
+
+    }
+}
+
 Mat getReconstructedFace(Mat mean, Mat eigenvectors, Mat face, int i) {
     Mat projection = LDA::subspaceProject(eigenvectors, mean, face.reshape(1,1));
-    // Generate the reconstructed face back from the eigenspace.
     Mat reconstructionRow = LDA::subspaceReconstruct(eigenvectors, mean, projection);
-    Mat reconstructionMat = reconstructionRow.reshape(1, im_height);
-    Mat reconstructedFace = Mat(reconstructionMat.size(), CV_8U);
-    reconstructionMat.convertTo(reconstructedFace, CV_8U, 1, 0);
+    //Mat reconstructionMat = reconstructionRow.reshape(1, im_height);
+    Mat reconstructedFace = norm_0_255(reconstructionRow.reshape(1, face.rows));
+    //reconstructionMat.convertTo(reconstructedFace, CV_8U, 1, 0);
     cv::resize(reconstructedFace, reconstructedFace, Size(im_width, im_height), 1.0, 1.0, INTER_CUBIC);
     imshow(format("reconstructed Face %d", i), reconstructedFace);
     return reconstructedFace;
@@ -201,26 +220,41 @@ int main( int argc, char** argv ){
     string database_file = "data/friends_db.txt";
 
     // These vectors hold the images and corresponding labels:
-    //vector<Mat> images;
-    //vector<int> labels;
-    //read_dataset(database_file, images, labels, ';');
+    vector<Mat> images;
+    vector<int> labels;
+    read_dataset(database_file, images, labels, ';');
 
-    //im_width = images[0].cols;
-    //im_height = images[0].rows;
-    im_width = 320;
-    im_height = 320;
-    string saveModelPath = "face-rec-model.txt";
+    im_width = images[0].cols;
+    im_height = images[0].rows;
+    //im_width = 320;
+    //im_height = 320;
+    string saveModelPath;
     Ptr<BasicFaceRecognizer> model;
-    if(model_name == "eigenfaces") model = createEigenFaceRecognizer();
-    else if(model_name == "fisherfaces") model = createFisherFaceRecognizer();
+    if(model_name == "eigenfaces") {
+        saveModelPath = "models/eigenfaces_model.yml";
+        model = createEigenFaceRecognizer();
+        treshold = 0.08;
+        confidence_treshold = 200;
+    }
+    else if(model_name == "fisherfaces") {
+        saveModelPath = "models/fisherfaces_model.yml";
+        model = createFisherFaceRecognizer(16);
+        treshold = 0.16;
+        confidence_treshold = 200;
+    }
     else {
         cout << "The model_name must be set to eigenfaces or fisherfaces" << endl;
         exit(1);
     }
-    //model->train(images, labels);
-    //cout << "Saving the trained model to " << saveModelPath << endl;
-    //model->save(saveModelPath);
-    model->load(saveModelPath);
+    if(access( saveModelPath.c_str(), 0 ) != -1 ) {
+       cout << "Loading saved model from: " << saveModelPath << endl;
+       model->load(saveModelPath);
+    } else {
+        cout << "Training the model..." << endl;
+        model->train(images, labels);
+        cout << "Saving the trained model to: " << saveModelPath << endl;
+        model->save(saveModelPath);
+    }
     Mat img = imread(imagename);
     Mat workImg = getWorkImage(img);
     detectAndDisplay( workImg, img, model);

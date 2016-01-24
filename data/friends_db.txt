@@ -27,6 +27,7 @@ data/friends_preprocessed/aleksandra/32.bmp;0
 data/friends_preprocessed/aleksandra/33.bmp;0
 data/friends_preprocessed/aleksandra/34.bmp;0
 data/friends_preprocessed/aleksandra/35.bmp;0
+data/friends_preprocessed/aleksandra/36.bmp;0
 data/friends_preprocessed/aleksandra/4.bmp;0
 data/friends_preprocessed/aleksandra/5.bmp;0
 data/friends_preprocessed/aleksandra/6.bmp;0
@@ -127,6 +128,9 @@ data/friends_preprocessed/maira/38.bmp;3
 data/friends_preprocessed/maira/39.bmp;3
 data/friends_preprocessed/maira/4.bmp;3
 data/friends_preprocessed/maira/40.bmp;3
+data/friends_preprocessed/maira/41.bmp;3
+data/friends_preprocessed/maira/42.bmp;3
+data/friends_preprocessed/maira/43.bmp;3
 data/friends_preprocessed/maira/5.bmp;3
 data/friends_preprocessed/maira/6.bmp;3
 data/friends_preprocessed/maira/7.bmp;3

@@ -73,6 +73,7 @@ void equalizeLeftAndRightHalves(Mat &faceImg){
             faceImg.at<uchar>(y,x) = v;
         }// end x loop
     }//end y loop
+    //imshow("histogram_equalization", faceImg);
 }
 
 /** @function scaleImg
@@ -152,13 +153,13 @@ void setEyeCoordinates(int *leftX, int *leftY, int *rightX, int *rightY, Rect fa
             Point tl2(eyes[j].x + face.x, tlY2);
             Point dr2(eyes[j].x + eyes[j].width + face.x, drY2);
             if (eyeLeftX == 0 && eyeLeftY == 0){
-                rectangle(originalImg, tl2, dr2, Scalar(255, 0, 0));
+                //rectangle(originalImg, tl2, dr2, Scalar(255, 0, 0));
                 eyeLeftX = eyes[j].x;
                 eyeLeftY = eyes[j].y;
                 Rect r1(tl2, dr2);
             }
             else if (eyeRightX == 0 && eyeRightY == 0){
-                rectangle(originalImg, tl2, dr2, Scalar(255, 0, 0));
+                //rectangle(originalImg, tl2, dr2, Scalar(255, 0, 0));
                 eyeRightX = eyes[j].x;
                 eyeRightY = eyes[j].y;
                 Rect r2(tl2, dr2);
@@ -214,7 +215,7 @@ Mat cropFace(Mat srcImg, int eyeLeftX, int eyeLeftY, int eyeRightX, int eyeRight
     else dstImg = srcImg;
 
   	std::vector<Rect> faces;
-	face_cascade.detectMultiScale(dstImg, faces, 1.1, 3, CV_HAAR_DO_CANNY_PRUNING, Size(dstImg.size().width*0.2, dstImg.size().height*0.2));
+	face_cascade.detectMultiScale(dstImg, faces, 1.1, 3, CV_HAAR_DO_CANNY_PRUNING, Size(20,20));
 
     //FIXME: when the rotation is wrong
     if(faces.size() == 0)  return srcImg;
